@@ -1,6 +1,9 @@
 ton-repo/
 ├── main.py
 ├── requirements.txt
+├── coupons.json
+├── equipes_suivies.json
+├── ids_equipes.json
 └── .github/
     └── workflows/
         └── bot.yml
