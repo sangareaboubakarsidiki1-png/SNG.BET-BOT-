@@ -1,1 +1,7 @@
+ton-repo/
+├── main.py
+├── requirements.txt
+└── .github/
+    └── workflows/
+        └── bot.yml
 
