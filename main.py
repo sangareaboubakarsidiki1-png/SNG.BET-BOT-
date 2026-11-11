@@ -1,30 +1,20 @@
-yaml
-name: SNG BET BOT
+python
+import os
+import requests
 
-on:
-  workflow_dispatch:
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-jobs:
-  run-bot:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+print("Demarrage du bot...")
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
+if not TOKEN or not CHAT_ID:
+    print("ERREUR: TOKEN ou CHAT_ID manquant dans Secrets")
+else:
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    data = {"chat_id": CHAT_ID, "text": "✅ SNG BET BOT est en ligne ! Le test marche."}
+    r = requests.post(url, data=data)
+    print("Telegram reponse:", r.status_code)
+    print(r.text)
 
-      - name: Installer les dependances
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+print("Termine.")
 
-      - name: Lancer le bot
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          API_KEY_1: ${{ secrets.API_KEY_1 }}
-          API_KEY_2: ${{ secrets.API_KEY_2 }}
-        run: python main.py
