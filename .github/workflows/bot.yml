@@ -1,18 +1,28 @@
 yaml
+name: SNG BET BOT
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * 1'
+
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+
       - name: Installer les dependances
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r Requirements.txt
+
       - name: Lancer le bot
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
