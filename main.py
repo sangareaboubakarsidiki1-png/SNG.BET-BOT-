@@ -1,15 +1,16 @@
 
 
 python
-# main.py - SNG BET BOT - VERSION COUPON REEL
-# Le CHEF : il appelle equipe.py, récupère les matchs, construit le coupon
+# main.py - SNG BET BOT - VERSION COUPON REEL + SECURITE
+# Le CHEF : il utilise equipe.py pour le duel + securite.py pour protéger
 
 import os
 import requests
 from datetime import datetime, timedelta
 from equipe import duel
+from securite import verifier_secrets, deja_envoye_aujourd_hui, sauvegarder_coupon, verifier_coupon_securite
 
-# --- 1. CLES DEPUIS GITHUB SECRETS ---
+# --- CLES DEPUIS GITHUB SECRETS ---
 TOKEN = os.getenv("TELEGRAM_TOKEN")
 CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 API_FOOTBALL_KEY = os.getenv("API_FOOTBALL_KEY")
@@ -25,12 +26,8 @@ def envoyer_telegram(texte):
     r = requests.post(url, data=data)
     print("Telegram reponse:", r.status_code)
 
-# --- 2. CONSTRUIRE INFO EQUIPE AVEC LES VRAIES API ---
+# --- CONSTRUIRE INFO EQUIPE AVEC LES VRAIES API ---
 def construire_info_equipe_auto(nom_equipe, team_id_api=None):
-    """
-    Remplit les 6 cases avec les vraies API.
-    Si une API ne répond pas, on met une valeur neutre pour ne pas planter.
-    """
     info = {
         "forme": 0,
         "buteur_present": True,
@@ -45,16 +42,14 @@ def construire_info_equipe_auto(nom_equipe, team_id_api=None):
 
     headers = {"x-apisports-key": API_FOOTBALL_KEY}
     try:
-        # A. Forme : 5 derniers matchs
         url = f"https://v3.football.api-sports.io/teams/statistics?team={team_id_api}&season=2024&league=39"
         r = requests.get(url, headers=headers, timeout=10)
         if r.status_code == 200:
             data = r.json().get("response", {})
-            form = data.get("form", "")  # Ex: "WWDLW"
+            form = data.get("form", "")
             if form:
                 info["forme"] = form.count("W")
 
-        # B. Blessés : buteur / gardien absents ?
         url2 = f"https://v3.football.api-sports.io/injuries?team={team_id_api}&season=2024"
         r2 = requests.get(url2, headers=headers, timeout=10)
         if r2.status_code == 200:
@@ -66,7 +61,6 @@ def construire_info_equipe_auto(nom_equipe, team_id_api=None):
                 if "goalkeeper" in pos:
                     info["gardien_present"] = False
 
-        # C. Motivation simple : si forme >= 3, motivation haute
         if info["forme"] >= 3:
             info["motivation"] = 8
         elif info["forme"] == 2:
@@ -79,21 +73,21 @@ def construire_info_equipe_auto(nom_equipe, team_id_api=None):
 
     return info
 
-# --- 3. DETECTER MATCHS + FAIRE DUELS + CONSTRUIRE COUPON ---
+# --- DETECTER MATCHS + FAIRE DUELS + CONSTRUIRE COUPON ---
 def detecter_matchs_semaine_auto():
-    if not API_FOOTBALL_KEY:
-        envoyer_telegram("⚠️ <b>SNG BET BOT</b>\nClé API-Football manquante dans Secrets. Ajoute API_FOOTBALL_KEY.")
+    # 3. VERIFICATION AVANT LANCEMENT - Utilise securite.py
+    ok, manquants = verifier_secrets()
+    if not ok:
+        envoyer_telegram(f"❌ <b>SNG BET BOT bloqué</b>\nIl manque : {', '.join(manquants)}\nVa dans Settings > Secrets > Actions")
         return
 
     headers = {"x-apisports-key": API_FOOTBALL_KEY}
-    # On prend les grosses ligues : Angleterre, Espagne, France, Italie, Allemagne
-    ligues = [39, 140, 61, 135, 78]
+    ligues = [39, 140, 61, 135, 78]  # Angleterre, Espagne, France, Italie, Allemagne
     coupon = []
     analyses = []
 
     for league in ligues:
         try:
-            # Matchs des 7 prochains jours
             today = datetime.now().strftime("%Y-%m-%d")
             next_week = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%d")
             url = f"https://v3.football.api-sports.io/fixtures?league={league}&season=2024&from={today}&to={next_week}"
@@ -105,7 +99,7 @@ def detecter_matchs_semaine_auto():
             print(f"Erreur ligue {league}: {e}")
             continue
 
-        for m in matchs[:10]:  # Max 10 par ligue pour ne pas saturer
+        for m in matchs[:10]:
             equipe_A = m["teams"]["home"]["name"]
             equipe_B = m["teams"]["away"]["name"]
             id_A = m["teams"]["home"]["id"]
@@ -125,17 +119,28 @@ def detecter_matchs_semaine_auto():
                 coupon.append(f"✅ {equipe_A} vs {equipe_B} -> Victoire {gagnant} ({verdict})")
                 analyses.append(f"🏟️ <b>{equipe_A} vs {equipe_B}</b> - {date_match}\nScore duel: {resultat['A']['score']} - {resultat['B']['score']} | {verdict}\n👉 Choix coupon: <b>{gagnant} gagne</b>\n")
 
-    # --- 4. ENVOYER LE COUPON ---
-    if not coupon:
-        envoyer_telegram("📊 <b>SNG BET BOT - Analyse semaine</b>\n\nAucun GROS FAVORI trouvé cette semaine.\nOn ne joue pas pour ne pas perdre. ❌\n\nRègle: on joue seulement si écart >= 2.")
-    else:
-        # On limite à 3 matchs pour un combiné raisonnable
-        selection = coupon[:3]
-        texte = "🔥 <b>SNG BET BOT - COUPON REEL DE LA SEMAINE</b> 🔥\n\n"
-        texte += "\n".join(selection)
-        texte += "\n\n📋 <b>Analyses :</b>\n" + "\n".join(analyses[:3])
-        texte += "\n⚠️ Joue responsable. Mise conseillée: 1-2% de ton budget."
-        envoyer_telegram(texte)
+    # --- SECURITE AVANT ENVOI - Utilise securite.py ---
+    ok_secu, raison = verifier_coupon_securite(coupon)
+    if not ok_secu:
+        print(f"🛑 Coupon bloqué par sécurité : {raison}")
+        envoyer_telegram(f"📊 <b>SNG BET BOT - Analyse semaine</b>\n\n🛑 Coupon bloqué par sécurité : {raison}\n\nOn ne joue pas pour ne pas perdre.")
+        return
+
+    # Anti-doublon
+    texte_coupon = "\n".join(coupon)
+    if deja_envoye_aujourd_hui(texte_coupon):
+        print("Déjà envoyé aujourd'hui, on arrête.")
+        return
+
+    # Si tout est OK, on sauvegarde et on envoie
+    sauvegarder_coupon(texte_coupon)
+
+    selection = coupon[:3]
+    texte = "🔥 <b>SNG BET BOT - COUPON REEL DE LA SEMAINE</b> 🔥\n\n"
+    texte += "\n".join(selection)
+    texte += "\n\n📋 <b>Analyses :</b>\n" + "\n".join(analyses[:3])
+    texte += "\n⚠️ Joue responsable. Mise conseillée: 1-2% de ton budget."
+    envoyer_telegram(texte)
 
     print("Termine.")
 
