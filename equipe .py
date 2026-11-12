@@ -1,81 +1,35 @@
-python
-# equipe.py - VERSION FINALE NETTOYEE
-# L'ANALYSTE - Il fait uniquement le duel, il ne fait pas de coupon
-# Il reçoit les infos déjà remplies par main.py via les vraies API
-# AUCUNE FONCTION EN DOUBLE
 
-def comprendre_equipe(nom, info):
-    """ Teste une équipe sur 6 cases. """
-    score = 0
-    cases = {}
-
-    # 1. Forme : 3 victoires ou plus sur les 5 derniers
-    if info.get("forme", 0) >= 3:
-        cases["forme"] = True
-        score += 1
+# equipe.py - Systeme de duel
+def duel(nom_A, info_A, nom_B, info_B):
+    score_A = 0
+    score_B = 0
+    score_A += info_A.get("forme", 0) * 2
+    score_B += info_B.get("forme", 0) * 2
+    score_A += info_A.get("motivation", 5)
+    score_B += info_B.get("motivation", 5)
+    if info_A.get("buteur_present"):
+        score_A += 3
+    if info_B.get("buteur_present"):
+        score_B += 3
+    if info_A.get("gardien_present"):
+        score_A += 2
+    if info_B.get("gardien_present"):
+        score_B += 2
+    if info_A.get("jours_repos", 4) >= 4:
+        score_A += 1
+    if info_B.get("jours_repos", 4) >= 4:
+        score_B += 1
+    if info_A.get("mt_fin_favorable"):
+        score_A += 2
+    if info_B.get("mt_fin_favorable"):
+        score_B += 2
+    ecart = abs(score_A - score_B)
+    if score_A > score_B:
+        verdict = f"{nom_A} favori"
+    elif score_B > score_A:
+        verdict = f"{nom_B} favori"
     else:
-        cases["forme"] = False
-
-    # 2. Buteur présent
-    if info.get("buteur_present", False):
-        cases["buteur"] = True
-        score += 1
-    else:
-        cases["buteur"] = False
-
-    # 3. Gardien présent
-    if info.get("gardien_present", False):
-        cases["gardien"] = True
-        score += 1
-    else:
-        cases["gardien"] = False
-
-    # 4. Motivation : 7/10 ou plus
-    if info.get("motivation", 0) >= 7:
-        cases["motivation"] = True
-        score += 1
-    else:
-        cases["motivation"] = False
-
-    # 5. Repos : 3 jours ou plus - accepte les 2 noms
-    jours = info.get("jours_repos", info.get("repos", 0))
-    if jours >= 3:
-        cases["repos"] = True
-        score += 1
-    else:
-        cases["repos"] = False
-
-    # 6. MT / Fin favorable - accepte les 2 noms
-    mt_fin = info.get("mt_fin_favorable", info.get("mt_fin", False))
-    if mt_fin:
-        cases["mt_fin"] = True
-        score += 1
-    else:
-        cases["mt_fin"] = False
-
-    return {"nom": nom, "score": score, "cases": cases}
-
-def duel(equipe_A, info_A, equipe_B, info_B):
-    """ Compare les 2 équipes opposées avant de donner un résultat. """
-    res_A = comprendre_equipe(equipe_A, info_A)
-    res_B = comprendre_equipe(equipe_B, info_B)
-    ecart = res_A["score"] - res_B["score"]
-
-    if ecart >= 3:
-        verdict = "GROS FAVORI A"
-    elif ecart == 2:
-        verdict = "FAVORI A"
-    elif ecart == 1:
-        verdict = "MATCH SERRE - A"
-    elif ecart == 0:
-        verdict = "EGALITE - NE JOUE PAS"
-    elif ecart == -1:
-        verdict = "MATCH SERRE - B"
-    elif ecart == -2:
-        verdict = "FAVORI B"
-    else:
-        verdict = "GROS FAVORI B"
-
-    return {"A": res_A, "B": res_B, "ecart": ecart, "verdict": verdict}
+        verdict = "Equilibre"
+    return {"A": {"score": score_A}, "B": {"score": score_B}, "ecart": ecart, "verdict": verdict}
 
 
